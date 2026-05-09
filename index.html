@@ -213,6 +213,7 @@
     <div id="controls">
         <button id="submit-guess">确认 (Enter)</button>
         <button id="clear-input" class="secondary">清空</button>
+        <button id="replay-btn" class="secondary" style="display: none;">再来一局</button>
         <button id="share-result" class="secondary" style="display: none;">分享结果</button>
     </div>
     <div class="tip">在下方输入框打字，方格会实时显示 · 输入时会自动提示曲库中的歌曲</div>
@@ -276,6 +277,10 @@
         }
 
         function pickDailyTargetSong() {
+            // 测试模式：随机选一首，不限每日一题
+            if (isTestMode()) {
+                return uniqueSongs[Math.floor(Math.random() * uniqueSongs.length)];
+            }
             const seed = getDailySeed();
             let hash = seed;
             hash = ((hash << 5) - hash + 31) | 0;
@@ -283,11 +288,23 @@
             return uniqueSongs[idx];
         }
 
+        // 测试模式：URL 带 ?test=1 时，不受"每天只能玩一次"限制，答案也随机
+        function isTestMode() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('test') === '1';
+            } catch (e) {
+                return false;
+            }
+        }
+
         function canPlayToday() {
+            if (isTestMode()) return true;
             return localStorage.getItem('lastPlayedDate') !== getTodayDate();
         }
 
         function setPlayedToday() {
+            if (isTestMode()) return;
             localStorage.setItem('lastPlayedDate', getTodayDate());
         }
 
@@ -334,10 +351,16 @@
             document.getElementById('submit-guess').style.display = 'inline-block';
             document.getElementById('clear-input').style.display = 'inline-block';
             document.getElementById('share-result').style.display = 'none';
+            document.getElementById('replay-btn').style.display = isTestMode() ? 'inline-block' : 'none';
             document.querySelector('.tip').style.display = 'block';
             document.getElementById('message').textContent = '';
             document.getElementById('message').className = '';
             document.getElementById('answer-info').textContent = '';
+
+            if (isTestMode()) {
+                document.getElementById('message').textContent = `🧪 测试模式 · 当前答案：${targetSong}`;
+                document.getElementById('message').className = '';
+            }
 
             highlightActiveRow();
             setTimeout(() => guessInput.focus(), 50);
@@ -655,6 +678,10 @@
             document.getElementById('submit-guess').style.display = 'none';
             document.getElementById('clear-input').style.display = 'none';
             document.getElementById('share-result').style.display = 'inline-block';
+            // 测试模式下游戏结束也能继续换题
+            if (isTestMode()) {
+                document.getElementById('replay-btn').style.display = 'inline-block';
+            }
             setPlayedToday();
         }
 
@@ -700,6 +727,11 @@
         // ========== Event listeners ==========
         document.getElementById('submit-guess').addEventListener('click', submitGuess);
         document.getElementById('share-result').addEventListener('click', shareResult);
+        document.getElementById('replay-btn').addEventListener('click', () => {
+            // 测试模式下一键换题
+            localStorage.removeItem('lastPlayedDate');
+            initGame();
+        });
 
         // Hidden reset: Ctrl+Alt+R
         document.addEventListener('keydown', function(event) {
