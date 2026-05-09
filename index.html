@@ -33,9 +33,6 @@
             color: #6aaa64;
             font-weight: bold;
         }
-        #game-container {
-            position: relative;
-        }
         #game-board {
             display: grid;
             gap: 5px;
@@ -56,38 +53,29 @@
         }
         .tile.filled-pending {
             border-color: #878a8c;
-            animation: pop 0.1s ease;
-        }
-        @keyframes pop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.08); }
-            100% { transform: scale(1); }
         }
         .tile.active-row {
             border-color: #b7babd;
         }
-        .tile.active-row.cursor {
-            border-color: #3a7bd5;
-            box-shadow: 0 0 0 1px #3a7bd5 inset;
+        #input-area {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
         }
-        /* Hidden input overlay for direct typing */
-        #hidden-input {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            border: none;
+        #guess-input {
+            padding: 10px 14px;
+            font-size: 18px;
+            width: 240px;
+            border: 2px solid #d3d6da;
+            border-radius: 6px;
             outline: none;
-            background: transparent;
-            font-size: 16px;
-            caret-color: transparent;
-            color: transparent;
-            padding: 0;
-            margin: 0;
-            z-index: 2;
-            cursor: pointer;
+            transition: border-color 0.2s;
+            text-align: center;
+            font-family: inherit;
+        }
+        #guess-input:focus {
+            border-color: #6aaa64;
         }
         #controls {
             display: flex;
@@ -114,6 +102,10 @@
         button.secondary:hover {
             background-color: #5e6162;
         }
+        button:disabled {
+            background-color: #b7babd;
+            cursor: not-allowed;
+        }
         #message {
             margin-top: 10px;
             font-weight: bold;
@@ -139,15 +131,10 @@
                 height: 38px;
                 font-size: 18px;
             }
-            #game-board {
-                gap: 4px;
-            }
-            body {
-                padding: 12px;
-            }
-            h1 {
-                font-size: 20px;
-            }
+            #game-board { gap: 4px; }
+            body { padding: 12px; }
+            h1 { font-size: 20px; }
+            #guess-input { width: 200px; font-size: 16px; }
         }
         @media (max-width: 400px) {
             .tile {
@@ -155,28 +142,31 @@
                 height: 32px;
                 font-size: 16px;
             }
+            #guess-input { width: 170px; }
         }
     </style>
 </head>
 <body>
     <h1>周杰伦歌曲 Wordle</h1>
     <div id="length-hint"></div>
-    <div id="game-container">
-        <div id="game-board"></div>
+    <div id="game-board"></div>
+
+    <div id="input-area">
         <input
             type="text"
-            id="hidden-input"
+            id="guess-input"
+            placeholder="请输入歌曲名"
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
-            spellcheck="false"
-            aria-label="输入歌曲名称">
+            spellcheck="false">
     </div>
     <div id="controls">
         <button id="submit-guess">确认 (Enter)</button>
+        <button id="clear-input" class="secondary">清空</button>
         <button id="share-result" class="secondary" style="display: none;">分享结果</button>
     </div>
-    <div class="tip">提示：直接用键盘敲字即可，点击任意方块可重新聚焦输入</div>
+    <div class="tip">在下方输入框打字，方格会实时显示 · 回车或点"确认"提交</div>
     <div id="message"></div>
 
     <script>
@@ -222,7 +212,6 @@
             "蜗牛","你比从前快乐","世界末日","轨迹","断了的弦","霍元甲","献世","黄金甲","不能说的秘密","千山万水","周大侠","天地一斗","麦烝玮","阿爸","画沙","你是我的OK绷","刀马旦","布拉格广场","屋顶","彩虹天堂","月光","手牵手","蓝色飞扬","这所有的一切","恒星不忘"
         ];
 
-        // 去重（保险起见）
         const uniqueSongs = [...new Set(songs)];
 
         let targetSong;
@@ -244,7 +233,6 @@
 
         function pickDailyTargetSong() {
             const seed = getDailySeed();
-            // 简单的确定性哈希，让每天题目固定
             let hash = seed;
             hash = ((hash << 5) - hash + 31) | 0;
             const idx = Math.abs(hash) % uniqueSongs.length;
@@ -252,8 +240,7 @@
         }
 
         function canPlayToday() {
-            const lastPlayedDate = localStorage.getItem('lastPlayedDate');
-            return lastPlayedDate !== getTodayDate();
+            return localStorage.getItem('lastPlayedDate') !== getTodayDate();
         }
 
         function setPlayedToday() {
@@ -270,7 +257,7 @@
             const len = targetSong.length;
             const sameLenCount = uniqueSongs.filter(s => s.length === len).length;
             document.getElementById('length-hint').innerHTML =
-                `本题共 <span class="count">${len}</span> 个字 · 曲库中共有 <span class="count">${sameLenCount}</span> 首同字数歌曲`;
+                `本题共 <span class="count">${len}</span> 个字 · 曲库中有 <span class="count">${sameLenCount}</span> 首同字数歌曲`;
 
             const gameBoard = document.getElementById('game-board');
             gameBoard.style.gridTemplateColumns = `repeat(${len}, 1fr)`;
@@ -285,96 +272,93 @@
                 }
             }
 
+            const guessInput = document.getElementById('guess-input');
+            guessInput.value = '';
+            guessInput.maxLength = len;
+
             if (!canPlayToday()) {
                 showMessage('今天已经玩过了，明天再来吧！');
-                document.getElementById('hidden-input').style.display = 'none';
+                document.getElementById('input-area').style.display = 'none';
                 document.getElementById('submit-guess').style.display = 'none';
-                document.getElementById('controls').querySelector('.tip');
+                document.getElementById('clear-input').style.display = 'none';
                 document.querySelector('.tip').style.display = 'none';
                 gameOver = true;
                 return;
             }
 
-            document.getElementById('hidden-input').value = '';
-            document.getElementById('hidden-input').style.display = 'block';
+            document.getElementById('input-area').style.display = 'flex';
             document.getElementById('submit-guess').style.display = 'inline-block';
+            document.getElementById('clear-input').style.display = 'inline-block';
             document.getElementById('share-result').style.display = 'none';
+            document.querySelector('.tip').style.display = 'block';
             document.getElementById('message').textContent = '';
             document.getElementById('message').className = '';
 
-            updateActiveRow();
-            setTimeout(focusInput, 50);
+            highlightActiveRow();
+            setTimeout(() => guessInput.focus(), 50);
         }
 
-        function focusInput() {
-            if (gameOver) return;
-            document.getElementById('hidden-input').focus();
-        }
-
-        function updateActiveRow() {
+        function highlightActiveRow() {
             const tiles = document.querySelectorAll('.tile');
-            tiles.forEach(t => t.classList.remove('active-row', 'cursor'));
+            tiles.forEach(t => t.classList.remove('active-row'));
             if (gameOver) return;
             const len = targetSong.length;
             for (let j = 0; j < len; j++) {
                 const idx = guessCount * len + j;
                 if (tiles[idx]) tiles[idx].classList.add('active-row');
             }
-            // cursor indicator on the next empty tile
-            const currentText = document.getElementById('hidden-input').value;
-            const cursorCol = Math.min(currentText.length, len - 1);
-            const cursorIdx = guessCount * len + cursorCol;
-            if (tiles[cursorIdx] && !currentText[cursorCol]) {
-                tiles[cursorIdx].classList.add('cursor');
-            }
         }
 
-        function updateCurrentRowDisplay(text) {
+        function renderCurrentRow(text) {
             const len = targetSong.length;
             const tiles = document.querySelectorAll('.tile');
             for (let j = 0; j < len; j++) {
                 const idx = guessCount * len + j;
                 const tile = tiles[idx];
                 if (!tile) continue;
-                // Only update tiles that haven't been colored yet (this row)
+                // Skip tiles that have already been scored
                 if (tile.classList.contains('correct') ||
                     tile.classList.contains('present') ||
                     tile.classList.contains('absent')) continue;
-                tile.textContent = text[j] || '';
-                if (text[j]) {
+                const ch = text[j] || '';
+                tile.textContent = ch;
+                if (ch) {
                     tile.classList.add('filled-pending');
                 } else {
                     tile.classList.remove('filled-pending');
                 }
             }
-            updateActiveRow();
         }
 
-        // ========== Input handling with IME support ==========
-        const hiddenInput = document.getElementById('hidden-input');
+        // ========== Input handling (IME-safe) ==========
+        const guessInput = document.getElementById('guess-input');
 
-        hiddenInput.addEventListener('compositionstart', () => {
+        guessInput.addEventListener('compositionstart', () => {
             isComposing = true;
         });
 
-        hiddenInput.addEventListener('compositionend', () => {
+        guessInput.addEventListener('compositionend', () => {
             isComposing = false;
-            truncateAndRender();
-        });
-
-        hiddenInput.addEventListener('input', () => {
-            if (isComposing) return;
-            truncateAndRender();
-        });
-
-        function truncateAndRender() {
-            if (hiddenInput.value.length > targetSong.length) {
-                hiddenInput.value = hiddenInput.value.slice(0, targetSong.length);
+            // Trim if IME committed more chars than allowed
+            if (guessInput.value.length > targetSong.length) {
+                guessInput.value = guessInput.value.slice(0, targetSong.length);
             }
-            updateCurrentRowDisplay(hiddenInput.value);
-        }
+            renderCurrentRow(guessInput.value);
+        });
 
-        hiddenInput.addEventListener('keydown', (e) => {
+        guessInput.addEventListener('input', () => {
+            // During composition, show the partial text too (but don't trim)
+            if (isComposing) {
+                renderCurrentRow(guessInput.value.slice(0, targetSong.length));
+                return;
+            }
+            if (guessInput.value.length > targetSong.length) {
+                guessInput.value = guessInput.value.slice(0, targetSong.length);
+            }
+            renderCurrentRow(guessInput.value);
+        });
+
+        guessInput.addEventListener('keydown', (e) => {
             if (isComposing) return;
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -382,9 +366,11 @@
             }
         });
 
-        // Click anywhere on the board refocuses the input
-        document.getElementById('game-container').addEventListener('click', focusInput);
-        document.getElementById('game-board').addEventListener('click', focusInput);
+        document.getElementById('clear-input').addEventListener('click', () => {
+            guessInput.value = '';
+            renderCurrentRow('');
+            guessInput.focus();
+        });
 
         // ========== Submit & evaluation ==========
         function showMessage(text, type = '') {
@@ -395,18 +381,16 @@
 
         function submitGuess() {
             if (gameOver) return;
-            const guess = hiddenInput.value.trim();
+            const guess = guessInput.value.trim();
 
             if (guess.length === 0) {
                 showMessage('请输入歌曲名', 'error');
                 return;
             }
-
             if (guess.length !== targetSong.length) {
                 showMessage(`需要输入 ${targetSong.length} 个字的歌曲名`, 'error');
                 return;
             }
-
             if (!uniqueSongs.includes(guess)) {
                 showMessage('曲库中没有这首歌', 'error');
                 return;
@@ -416,19 +400,18 @@
             const result = checkGuess(guess);
             displayResult(guess, result, guessCount);
             const won = (guess === targetSong);
-
             guessCount++;
 
-            // Wait for flip animation to complete before end-game state
             setTimeout(() => {
                 if (won) {
                     endGame(true);
                 } else if (guessCount >= maxGuesses) {
                     endGame(false);
                 } else {
-                    hiddenInput.value = '';
-                    updateActiveRow();
-                    focusInput();
+                    guessInput.value = '';
+                    renderCurrentRow('');
+                    highlightActiveRow();
+                    guessInput.focus();
                 }
             }, targetSong.length * 250 + 400);
         }
@@ -441,14 +424,12 @@
             const guessChars = guess.split('');
             const used = new Array(len).fill(false);
 
-            // Pass 1: correct positions
             for (let i = 0; i < len; i++) {
                 if (guessChars[i] === targetChars[i]) {
                     result[i] = 'correct';
                     used[i] = true;
                 }
             }
-            // Pass 2: present but wrong position
             for (let i = 0; i < len; i++) {
                 if (result[i] === 'correct') continue;
                 for (let j = 0; j < len; j++) {
@@ -475,7 +456,7 @@
                     tile.textContent = guessChar;
                     tile.style.transform = 'rotateX(180deg)';
                     setTimeout(() => {
-                        tile.classList.remove('filled-pending', 'active-row', 'cursor');
+                        tile.classList.remove('filled-pending', 'active-row');
                         switch (result[i]) {
                             case 'correct':
                                 tile.classList.add('correct');
@@ -510,9 +491,9 @@
             } else {
                 showMessage(`游戏结束！正确答案是：${targetSong}`, 'error');
             }
-            hiddenInput.blur();
-            hiddenInput.style.display = 'none';
+            document.getElementById('input-area').style.display = 'none';
             document.getElementById('submit-guess').style.display = 'none';
+            document.getElementById('clear-input').style.display = 'none';
             document.getElementById('share-result').style.display = 'inline-block';
             setPlayedToday();
         }
@@ -527,13 +508,9 @@
                 let rowEmojis = '';
                 for (let j = 0; j < len; j++) {
                     const tile = tiles[i * len + j];
-                    if (tile.classList.contains('correct')) {
-                        rowEmojis += '🟩';
-                    } else if (tile.classList.contains('present')) {
-                        rowEmojis += '🟨';
-                    } else {
-                        rowEmojis += '⬛';
-                    }
+                    if (tile.classList.contains('correct')) rowEmojis += '🟩';
+                    else if (tile.classList.contains('present')) rowEmojis += '🟨';
+                    else rowEmojis += '⬛';
                 }
                 shareText += rowEmojis + '\n';
             }
