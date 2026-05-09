@@ -71,6 +71,15 @@
             0%, 100% { box-shadow: 0 0 0 0 rgba(58, 123, 213, 0.4); }
             50% { box-shadow: 0 0 0 4px rgba(58, 123, 213, 0.15); }
         }
+        /* 新字符弹出动画：让每个字"跳"一下再定位 */
+        .tile.pop-in {
+            animation: pop-in 0.18s ease-out;
+        }
+        @keyframes pop-in {
+            0%   { transform: scale(0.6); opacity: 0.2; }
+            60%  { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
 
         /* 透明输入框：覆盖当前猜测行，接收键盘和 IME 输入 */
         #typer {
@@ -416,23 +425,67 @@
         }
 
         // 把 typer 里的文字同步到当前行的方格上
+        // 关键：如果一次输入了多个新字（如 IME 一次上屏"晴天"），
+        // 会错开时间让它们一个一个弹跳出现，而不是瞬间全部闪现
         function renderCurrentRow(text) {
             const len = targetSong.length;
             const tiles = gameBoard.querySelectorAll('.tile');
+
+            // 先扫描一遍找出"新增的字"的位置
+            const newCharCols = [];
             for (let j = 0; j < len; j++) {
                 const idx = guessCount * len + j;
                 const tile = tiles[idx];
                 if (!tile) continue;
-                // 已评分的格子不动
                 if (tile.classList.contains('correct') ||
                     tile.classList.contains('present') ||
                     tile.classList.contains('absent')) continue;
+                const newCh = text[j] || '';
+                const oldCh = tile.textContent || '';
+                if (newCh && newCh !== oldCh) {
+                    newCharCols.push(j);
+                }
+            }
+
+            // 渲染：对新字错开时间做弹跳动画
+            for (let j = 0; j < len; j++) {
+                const idx = guessCount * len + j;
+                const tile = tiles[idx];
+                if (!tile) continue;
+                if (tile.classList.contains('correct') ||
+                    tile.classList.contains('present') ||
+                    tile.classList.contains('absent')) continue;
+
                 const ch = text[j] || '';
-                tile.textContent = ch;
+                const wasEmpty = !tile.textContent;
+                const newOrder = newCharCols.indexOf(j);
+
                 if (ch) {
-                    tile.classList.add('filled-pending');
+                    if (newOrder >= 0 && newCharCols.length > 1) {
+                        // 一次输入多个字：第 0 个立刻出现，后面每个间隔 80ms
+                        const delay = newOrder * 80;
+                        setTimeout(() => {
+                            tile.textContent = ch;
+                            tile.classList.add('filled-pending');
+                            tile.classList.remove('pop-in');
+                            // 触发重绘以重新播放动画
+                            void tile.offsetWidth;
+                            tile.classList.add('pop-in');
+                            updateCursor();
+                        }, delay);
+                    } else {
+                        tile.textContent = ch;
+                        tile.classList.add('filled-pending');
+                        // 只有"新填入"时才播动画（避免删除/替换时重复触发）
+                        if (wasEmpty || newOrder >= 0) {
+                            tile.classList.remove('pop-in');
+                            void tile.offsetWidth;
+                            tile.classList.add('pop-in');
+                        }
+                    }
                 } else {
-                    tile.classList.remove('filled-pending');
+                    tile.textContent = '';
+                    tile.classList.remove('filled-pending', 'pop-in');
                 }
             }
             updateCursor();
