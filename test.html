@@ -275,7 +275,7 @@
 
         let targetSong;
         let guessCount = 0;
-        const maxGuesses = 6;
+        let maxGuesses = 6;  // 每局动态计算：曲库同字数歌曲少时会缩减
         let isComposing = false;
         let gameOver = false;
         let hasWon = false;
@@ -324,8 +324,11 @@
 
             const len = targetSong.length;
             const sameLenCount = uniqueSongs.filter(s => s.length === len).length;
+            // 规则：如果曲库里同字数歌曲不多（≤5 首），机会数缩减为"歌曲数-1"
+            // 保证最少 1 次机会
+            maxGuesses = sameLenCount <= 5 ? Math.max(1, sameLenCount - 1) : 6;
             document.getElementById('length-hint').innerHTML =
-                `本题共 <span class="count">${len}</span> 个字 · 曲库中有 <span class="count">${sameLenCount}</span> 首同字数歌曲`;
+                `本题共 <span class="count">${len}</span> 个字 · 曲库中有 <span class="count">${sameLenCount}</span> 首同字数歌曲 · 你有 <span class="count">${maxGuesses}</span> 次机会`;
 
             gameBoard.style.gridTemplateColumns = `repeat(${len}, 1fr)`;
             gameBoard.innerHTML = '';
