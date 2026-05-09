@@ -62,6 +62,7 @@
             align-items: center;
             gap: 8px;
             margin-bottom: 12px;
+            position: relative;
         }
         #guess-input {
             padding: 10px 14px;
@@ -76,6 +77,53 @@
         }
         #guess-input:focus {
             border-color: #6aaa64;
+        }
+        #suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 240px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #fff;
+            border: 1px solid #d3d6da;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 10;
+            margin-top: 4px;
+            display: none;
+        }
+        #suggestions.visible {
+            display: block;
+        }
+        .suggestion-item {
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .suggestion-item:hover,
+        .suggestion-item.active {
+            background-color: #f0f0f0;
+        }
+        .suggestion-item .album-tag {
+            font-size: 12px;
+            color: #888;
+            flex-shrink: 0;
+        }
+        #answer-info {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #555;
+            text-align: center;
+            min-height: 20px;
         }
         #controls {
             display: flex;
@@ -160,14 +208,16 @@
             autocorrect="off"
             autocapitalize="off"
             spellcheck="false">
+        <div id="suggestions"></div>
     </div>
     <div id="controls">
         <button id="submit-guess">确认 (Enter)</button>
         <button id="clear-input" class="secondary">清空</button>
         <button id="share-result" class="secondary" style="display: none;">分享结果</button>
     </div>
-    <div class="tip">在下方输入框打字，方格会实时显示 · 回车或点"确认"提交</div>
+    <div class="tip">在下方输入框打字，方格会实时显示 · 输入时会自动提示曲库中的歌曲</div>
     <div id="message"></div>
+    <div id="answer-info"></div>
 
     <script>
         // =====================================================================
@@ -175,44 +225,38 @@
         //  收录：周杰伦本人演唱或合唱、正式发行的中文歌名
         //  不含：现场版、Demo、他人演唱作品、纯英文标题、纯音乐
         // =====================================================================
-        const songs = [
-            // Jay (2000)
-            "可爱女人","完美主义","星晴","娘子","斗牛","黑色幽默","伊斯坦堡","印地安老斑鸠","龙卷风","反方向的钟",
-            // 范特西 (2001)
-            "爱在西元前","爸我回来了","简单爱","忍者","开不了口","上海一九四三","对不起","威廉古堡","双截棍","安静",
-            // 八度空间 (2002)
-            "半兽人","半岛铁盒","暗号","龙拳","火车叨位去","分裂","爷爷泡的茶","回到过去","米兰的小铁匠","最后的战役",
-            // 叶惠美 (2003)
-            "以父之名","懦夫","晴天","三年二班","东风破","你听得到","同一种调调","她的睫毛","爱情悬崖","梯田","双刀",
-            // 七里香 (2004)
-            "我的地盘","七里香","借口","外婆","将军","搁浅","乱舞春秋","困兽之斗","园游会","止战之殇",
-            // 11月的肖邦 (2005)
-            "夜曲","蓝色风暴","发如雪","黑色毛衣","四面楚歌","枫","浪漫手机","逆鳞","麦芽糖","珊瑚海","飘移","一路向北",
-            // 依然范特西 (2006)
-            "夜的第七章","听妈妈的话","千里之外","本草纲目","退后","红模仿","心雨","白色风车","迷迭香","菊花台",
-            // 我很忙 (2007)
-            "牛仔很忙","彩虹","青花瓷","阳光宅男","蒲公英的约定","无双","我不配","扯","甜甜的","最长的电影",
-            // 魔杰座 (2008)
-            "龙战骑士","给我一首歌的时间","蛇舞","花海","魔术先生","说好的幸福呢","兰亭序","流浪诗人","时光机","乔克叔叔","稻香",
-            // 跨时代 (2010)
-            "跨时代","说了再见","烟花易冷","免费教学录影带","好久不见","雨下一整晚","嘻哈空姐","我落泪情绪零碎","爱的飞行日记","自导自演","超人不会飞",
-            // 惊叹号 (2011)
-            "惊叹号","迷魂曲","公主病","你好吗","疗伤烧肉粽","琴伤","水手怕水","世界未末日","皮影戏","超跑女神",
-            // 12新作 (2012)
-            "四季列车","手语","公公偏头痛","明明就","傻笑","比较大的大提琴","爱你没差","红尘客栈","梦想启动","大笨钟","哪里都是你","乌克丽丽",
-            // 哎呦，不错哦 (2014)
-            "阳明山","窃爱","算什么男人","天涯过客","怎么了","一口气全念对","我要夏天","手写的从前","鞋子特大号","听爸爸的话","美人鱼","听见下雨的声音",
-            // 周杰伦的床边故事 (2016)
-            "床边故事","说走就走","一点点","前世情人","英雄","不该","土耳其冰淇淋","告白气球","爱情废柴",
-            // 最伟大的作品 (2022)
-            "最伟大的作品","还在流浪","说好不哭","红颜如霜","不爱我就拉倒","错过的烟火","等你下课","粉色海洋","倒影","我是如此相信",
-            // 太阳之子 (2026)
-            "太阳之子","西西里","那天下雨了","湘女多情","谁稀罕","七月的极光","爱琴海","圣徒","女儿殿下","淘金小镇","乡间的路","圣诞星",
-            // EP / 单曲 / 原声带 / 合辑 / 合作献唱
-            "蜗牛","你比从前快乐","世界末日","轨迹","断了的弦","霍元甲","献世","黄金甲","不能说的秘密","千山万水","周大侠","天地一斗","麦烝玮","阿爸","画沙","你是我的OK绷","刀马旦","布拉格广场","屋顶","彩虹天堂","月光","手牵手","蓝色飞扬","这所有的一切","恒星不忘"
+        // 按专辑分组，每首歌带出处信息，便于游戏结束时展示
+        const songCatalog = [
+            { album: "Jay", year: 2000, songs: ["可爱女人","完美主义","星晴","娘子","斗牛","黑色幽默","伊斯坦堡","印地安老斑鸠","龙卷风","反方向的钟"] },
+            { album: "范特西", year: 2001, songs: ["爱在西元前","爸我回来了","简单爱","忍者","开不了口","上海一九四三","对不起","威廉古堡","双截棍","安静"] },
+            { album: "八度空间", year: 2002, songs: ["半兽人","半岛铁盒","暗号","龙拳","火车叨位去","分裂","爷爷泡的茶","回到过去","米兰的小铁匠","最后的战役"] },
+            { album: "叶惠美", year: 2003, songs: ["以父之名","懦夫","晴天","三年二班","东风破","你听得到","同一种调调","她的睫毛","爱情悬崖","梯田","双刀"] },
+            { album: "七里香", year: 2004, songs: ["我的地盘","七里香","借口","外婆","将军","搁浅","乱舞春秋","困兽之斗","园游会","止战之殇"] },
+            { album: "11月的肖邦", year: 2005, songs: ["夜曲","蓝色风暴","发如雪","黑色毛衣","四面楚歌","枫","浪漫手机","逆鳞","麦芽糖","珊瑚海","飘移","一路向北"] },
+            { album: "依然范特西", year: 2006, songs: ["夜的第七章","听妈妈的话","千里之外","本草纲目","退后","红模仿","心雨","白色风车","迷迭香","菊花台"] },
+            { album: "我很忙", year: 2007, songs: ["牛仔很忙","彩虹","青花瓷","阳光宅男","蒲公英的约定","无双","我不配","扯","甜甜的","最长的电影"] },
+            { album: "魔杰座", year: 2008, songs: ["龙战骑士","给我一首歌的时间","蛇舞","花海","魔术先生","说好的幸福呢","兰亭序","流浪诗人","时光机","乔克叔叔","稻香"] },
+            { album: "跨时代", year: 2010, songs: ["跨时代","说了再见","烟花易冷","免费教学录影带","好久不见","雨下一整晚","嘻哈空姐","我落泪情绪零碎","爱的飞行日记","自导自演","超人不会飞"] },
+            { album: "惊叹号", year: 2011, songs: ["惊叹号","迷魂曲","公主病","你好吗","疗伤烧肉粽","琴伤","水手怕水","世界未末日","皮影戏","超跑女神"] },
+            { album: "12新作", year: 2012, songs: ["四季列车","手语","公公偏头痛","明明就","傻笑","比较大的大提琴","爱你没差","红尘客栈","梦想启动","大笨钟","哪里都是你","乌克丽丽"] },
+            { album: "哎呦，不错哦", year: 2014, songs: ["阳明山","窃爱","算什么男人","天涯过客","怎么了","一口气全念对","我要夏天","手写的从前","鞋子特大号","听爸爸的话","美人鱼","听见下雨的声音"] },
+            { album: "周杰伦的床边故事", year: 2016, songs: ["床边故事","说走就走","一点点","前世情人","英雄","不该","土耳其冰淇淋","告白气球","爱情废柴"] },
+            { album: "最伟大的作品", year: 2022, songs: ["最伟大的作品","还在流浪","说好不哭","红颜如霜","不爱我就拉倒","错过的烟火","等你下课","粉色海洋","倒影","我是如此相信"] },
+            { album: "太阳之子", year: 2026, songs: ["太阳之子","西西里","那天下雨了","湘女多情","谁稀罕","七月的极光","爱琴海","圣徒","女儿殿下","淘金小镇","乡间的路","圣诞星"] },
+            { album: "EP / 单曲 / 原声带 / 合辑 / 合作献唱", year: null, songs: ["蜗牛","你比从前快乐","世界末日","轨迹","断了的弦","霍元甲","献世","黄金甲","不能说的秘密","千山万水","周大侠","天地一斗","麦烝玮","阿爸","画沙","你是我的OK绷","刀马旦","布拉格广场","屋顶","彩虹天堂","月光","手牵手","蓝色飞扬","这所有的一切","恒星不忘"] }
         ];
 
+        // 扁平化歌单 + 歌曲到专辑的反查索引
+        const songs = songCatalog.flatMap(a => a.songs);
         const uniqueSongs = [...new Set(songs)];
+        const songToAlbum = {};
+        songCatalog.forEach(a => a.songs.forEach(s => { songToAlbum[s] = a; }));
+
+        function formatAlbumInfo(song) {
+            const info = songToAlbum[song];
+            if (!info) return '';
+            return info.year ? `收录于《${info.album}》(${info.year})` : `收录于：${info.album}`;
+        }
 
         let targetSong;
         let guessCount = 0;
@@ -293,6 +337,7 @@
             document.querySelector('.tip').style.display = 'block';
             document.getElementById('message').textContent = '';
             document.getElementById('message').className = '';
+            document.getElementById('answer-info').textContent = '';
 
             highlightActiveRow();
             setTimeout(() => guessInput.focus(), 50);
@@ -344,33 +389,146 @@
                 guessInput.value = guessInput.value.slice(0, targetSong.length);
             }
             renderCurrentRow(guessInput.value);
+            updateSuggestions(guessInput.value);
         });
 
         guessInput.addEventListener('input', () => {
-            // During composition, show the partial text too (but don't trim)
             if (isComposing) {
                 renderCurrentRow(guessInput.value.slice(0, targetSong.length));
+                updateSuggestions(guessInput.value);
                 return;
             }
             if (guessInput.value.length > targetSong.length) {
                 guessInput.value = guessInput.value.slice(0, targetSong.length);
             }
             renderCurrentRow(guessInput.value);
+            updateSuggestions(guessInput.value);
         });
 
         guessInput.addEventListener('keydown', (e) => {
             if (isComposing) return;
+            const suggestionsBox = document.getElementById('suggestions');
+            const items = suggestionsBox.querySelectorAll('.suggestion-item');
+            const activeIdx = Array.from(items).findIndex(i => i.classList.contains('active'));
+
+            if (suggestionsBox.classList.contains('visible') && items.length > 0) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActiveSuggestion((activeIdx + 1) % items.length);
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActiveSuggestion((activeIdx - 1 + items.length) % items.length);
+                    return;
+                }
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const idx = activeIdx >= 0 ? activeIdx : 0;
+                    applySuggestion(items[idx].dataset.song);
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    hideSuggestions();
+                    return;
+                }
+            }
+
             if (e.key === 'Enter') {
                 e.preventDefault();
-                submitGuess();
+                // 如果下拉框开着并有选中项，按回车先填入
+                if (suggestionsBox.classList.contains('visible') && activeIdx >= 0) {
+                    applySuggestion(items[activeIdx].dataset.song);
+                } else {
+                    submitGuess();
+                }
             }
+        });
+
+        guessInput.addEventListener('blur', () => {
+            // 延迟关闭，给点击联想项留时间
+            setTimeout(hideSuggestions, 150);
+        });
+
+        guessInput.addEventListener('focus', () => {
+            if (guessInput.value) updateSuggestions(guessInput.value);
         });
 
         document.getElementById('clear-input').addEventListener('click', () => {
             guessInput.value = '';
             renderCurrentRow('');
+            hideSuggestions();
             guessInput.focus();
         });
+
+        // ========== 输入联想 ==========
+        function updateSuggestions(text) {
+            const suggestionsBox = document.getElementById('suggestions');
+            text = text.trim();
+            if (!text) {
+                hideSuggestions();
+                return;
+            }
+            // 优先：前缀匹配 > 包含匹配；同字数优先
+            const prefixMatches = uniqueSongs.filter(s => s.startsWith(text) && s !== text);
+            const containsMatches = uniqueSongs.filter(s =>
+                !s.startsWith(text) && s.includes(text)
+            );
+            const targetLen = targetSong.length;
+            const sortByLen = (a, b) => {
+                const da = Math.abs(a.length - targetLen);
+                const db = Math.abs(b.length - targetLen);
+                return da - db;
+            };
+            const matches = [...prefixMatches.sort(sortByLen), ...containsMatches.sort(sortByLen)].slice(0, 8);
+
+            if (matches.length === 0) {
+                hideSuggestions();
+                return;
+            }
+            suggestionsBox.innerHTML = matches.map((s, i) => {
+                const albumInfo = songToAlbum[s];
+                const albumTag = albumInfo ? `《${albumInfo.album}》` : '';
+                return `<div class="suggestion-item${i === 0 ? ' active' : ''}" data-song="${s}">
+                    <span>${s}</span>
+                    <span class="album-tag">${albumTag}</span>
+                </div>`;
+            }).join('');
+            suggestionsBox.classList.add('visible');
+
+            // 绑定点击
+            suggestionsBox.querySelectorAll('.suggestion-item').forEach(item => {
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // 防止 blur
+                    applySuggestion(item.dataset.song);
+                });
+            });
+        }
+
+        function setActiveSuggestion(idx) {
+            const items = document.querySelectorAll('.suggestion-item');
+            items.forEach(i => i.classList.remove('active'));
+            if (items[idx]) items[idx].classList.add('active');
+        }
+
+        function applySuggestion(song) {
+            if (song.length > targetSong.length) {
+                // 字数超限就不自动填了
+                hideSuggestions();
+                guessInput.focus();
+                return;
+            }
+            guessInput.value = song;
+            renderCurrentRow(song);
+            hideSuggestions();
+            guessInput.focus();
+        }
+
+        function hideSuggestions() {
+            const suggestionsBox = document.getElementById('suggestions');
+            suggestionsBox.classList.remove('visible');
+            suggestionsBox.innerHTML = '';
+        }
 
         // ========== Submit & evaluation ==========
         function showMessage(text, type = '') {
@@ -491,6 +649,8 @@
             } else {
                 showMessage(`游戏结束！正确答案是：${targetSong}`, 'error');
             }
+            // 无论输赢都显示答案的专辑出处
+            document.getElementById('answer-info').textContent = formatAlbumInfo(targetSong);
             document.getElementById('input-area').style.display = 'none';
             document.getElementById('submit-guess').style.display = 'none';
             document.getElementById('clear-input').style.display = 'none';
