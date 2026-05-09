@@ -280,6 +280,7 @@
         let isComposing = false;
         let gameOver = false;
         let hasWon = false;
+        let submittedGuesses = [];  // 记录本局已猜过的歌，不允许重复提交
 
         // ========== Daily seed / Test mode ==========
         function getTodayDate() {
@@ -322,6 +323,7 @@
             guessCount = 0;
             gameOver = false;
             hasWon = false;
+            submittedGuesses = [];  // 重置本局的已猜记录
 
             const len = targetSong.length;
             const sameLenCount = uniqueSongs.filter(s => s.length === len).length;
@@ -659,8 +661,12 @@
             if (!uniqueSongs.includes(guess)) {
                 showMessage('曲库中没有这首歌', 'error'); return;
             }
+            if (submittedGuesses.includes(guess)) {
+                showMessage('这首歌已经猜过了，换一首试试', 'error'); return;
+            }
 
             showMessage('');
+            submittedGuesses.push(guess);
             const result = checkGuess(guess);
             displayResult(guess, result, guessCount);
             const won = (guess === targetSong);
