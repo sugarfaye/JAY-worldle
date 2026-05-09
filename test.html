@@ -232,6 +232,7 @@
         <button id="submit-guess">确认 (Enter)</button>
         <button id="clear-input" class="secondary">清空</button>
         <button id="replay-btn" class="secondary" style="display: none;">再来一局</button>
+        <button id="replay-short-btn" class="secondary" style="display: none;">试试少字数歌</button>
         <button id="share-result" class="secondary" style="display: none;">分享结果</button>
     </div>
     <div class="tip">点击方格区域开始打字，字会直接显示在方格里 · 回车提交 · 退格删除</div>
@@ -316,8 +317,8 @@
         const gameBoard = document.getElementById('game-board');
 
         // ========== Game init ==========
-        function initGame() {
-            targetSong = pickDailyTargetSong();
+        function initGame(forcedSong) {
+            targetSong = forcedSong || pickDailyTargetSong();
             guessCount = 0;
             gameOver = false;
             hasWon = false;
@@ -350,6 +351,7 @@
                 typer.style.display = 'none';
                 document.getElementById('submit-guess').style.display = 'none';
                 document.getElementById('clear-input').style.display = 'none';
+                document.getElementById('replay-short-btn').style.display = 'none';
                 document.querySelector('.tip').style.display = 'none';
                 gameOver = true;
                 return;
@@ -360,6 +362,7 @@
             document.getElementById('clear-input').style.display = 'inline-block';
             document.getElementById('share-result').style.display = 'none';
             document.getElementById('replay-btn').style.display = isTestMode() ? 'inline-block' : 'none';
+            document.getElementById('replay-short-btn').style.display = isTestMode() ? 'inline-block' : 'none';
             document.querySelector('.tip').style.display = 'block';
             document.getElementById('message').textContent = '';
             document.getElementById('message').className = '';
@@ -756,6 +759,7 @@
             document.getElementById('share-result').style.display = 'inline-block';
             if (isTestMode()) {
                 document.getElementById('replay-btn').style.display = 'inline-block';
+                document.getElementById('replay-short-btn').style.display = 'inline-block';
             }
             setPlayedToday();
         }
@@ -801,6 +805,21 @@
         document.getElementById('replay-btn').addEventListener('click', () => {
             localStorage.removeItem('lastPlayedDate');
             initGame();
+        });
+        // 测试模式专用：只从"同字数歌曲 ≤ 5 首"的歌里随机挑，验证机会数缩减规则
+        document.getElementById('replay-short-btn').addEventListener('click', () => {
+            localStorage.removeItem('lastPlayedDate');
+            // 统计每个字数有多少歌
+            const lenDist = {};
+            uniqueSongs.forEach(s => { lenDist[s.length] = (lenDist[s.length] || 0) + 1; });
+            // 找出所有"稀有字数"的歌
+            const rareSongs = uniqueSongs.filter(s => lenDist[s.length] <= 5);
+            if (rareSongs.length === 0) {
+                initGame();
+                return;
+            }
+            const picked = rareSongs[Math.floor(Math.random() * rareSongs.length)];
+            initGame(picked);
         });
 
         document.addEventListener('keydown', function(event) {
